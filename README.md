@@ -79,6 +79,7 @@ The first version should focus on a narrow, trustworthy slice:
 - [Proposed DSL Schema](docs/dsl-schema.md)
 - [Backend Capabilities Matrix](docs/capabilities-matrix.md)
 - [Connection Model and Lookup Service](docs/connection-model.md)
+- [Long-Term Vision](docs/long-term-vision.md)
 
 ## Open questions
 
