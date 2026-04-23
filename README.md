@@ -85,6 +85,7 @@ The first version should focus on a narrow, trustworthy slice:
 - [Connection Model and Lookup Service](docs/connection-model.md)
 - [Long-Term Vision](docs/long-term-vision.md)
 - [v1 Scope](docs/v1-scope.md)
+- [Sandbox Stack](sandbox/README.md)
 
 ## Open questions
 

@@ -1,0 +1,158 @@
+services:
+  postgres-source:
+    image: postgres:16
+    container_name: euclid-postgres-source
+    environment:
+      POSTGRES_USER: source
+      POSTGRES_PASSWORD: source
+      POSTGRES_DB: sourcedb
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_source_data:/var/lib/postgresql/data
+      - ./postgres/init/source-init.sql:/docker-entrypoint-initdb.d/001-source-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U source -d sourcedb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres-destination:
+    image: postgres:16
+    container_name: euclid-postgres-destination
+    environment:
+      POSTGRES_USER: destination
+      POSTGRES_PASSWORD: destination
+      POSTGRES_DB: destdb
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_destination_data:/var/lib/postgresql/data
+      - ./postgres/init/destination-init.sql:/docker-entrypoint-initdb.d/001-destination-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U destination -d destdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: euclid-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: euclid-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  kafka-connect:
+    image: debezium/connect:2.7
+    container_name: euclid-kafka-connect
+    depends_on:
+      postgres-source:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: euclid-kafka-ui
+    depends_on:
+      - kafka
+      - kafka-connect
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: debezium
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
+
+  airbyte-db:
+    image: postgres:13
+    container_name: euclid-airbyte-db
+    environment:
+      POSTGRES_USER: airbyte
+      POSTGRES_PASSWORD: airbyte
+      POSTGRES_DB: airbyte
+    volumes:
+      - airbyte_db_data:/var/lib/postgresql/data
+
+  airbyte-server:
+    image: airbyte/server:0.63.11
+    container_name: euclid-airbyte-server
+    depends_on:
+      - airbyte-db
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_USER: airbyte
+      DATABASE_PASSWORD: airbyte
+      DATABASE_URL: jdbc:postgresql://airbyte-db:5432/airbyte
+      DATABASE_HOST: airbyte-db
+      DATABASE_PORT: 5432
+      DATABASE_DB: airbyte
+      AIRBYTE_VERSION: 0.63.11
+      WEBAPP_URL: http://localhost:8000
+
+  airbyte-webapp:
+    image: airbyte/webapp:0.63.11
+    container_name: euclid-airbyte-webapp
+    depends_on:
+      - airbyte-server
+    ports:
+      - "8000:80"
+    environment:
+      INTERNAL_API_HOST: airbyte-server:8001
+      CONNECTOR_BUILDER_API_HOST: airbyte-server:8001
+      AIRBYTE_VERSION: 0.63.11
+
+  data-generator:
+    image: python:3.11-slim
+    container_name: euclid-data-generator
+    depends_on:
+      postgres-source:
+        condition: service_healthy
+    working_dir: /app
+    command: ["bash", "-lc", "pip install --no-cache-dir psycopg2-binary && python update-generator.py"]
+    environment:
+      PGHOST: postgres-source
+      PGPORT: 5432
+      PGUSER: source
+      PGPASSWORD: source
+      PGDATABASE: sourcedb
+      UPDATE_INTERVAL_SECONDS: 15
+    volumes:
+      - ./scripts/update-generator.py:/app/update-generator.py:ro
+
+volumes:
+  postgres_source_data:
+  postgres_destination_data:
+  airbyte_db_data:
