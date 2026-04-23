@@ -4,33 +4,64 @@
 
 The safest path is to build this in phases and avoid over-abstracting early.
 
-The initial goal should not be to support every possible pipeline shape. The initial goal should be to prove that a declarative DSL, policy-based backend selection, and reliable orchestration can work end to end for a narrow but real slice of use cases.
+The initial goal should not be to support every possible pipeline shape. The initial goal should be to prove that a declarative DSL, policy-based backend selection, secure connection resolution, and reliable orchestration can work end to end for a narrow but real slice of use cases.
 
-## Phase 0: Architecture and contracts
+The first implementation should be **open source backend first**:
+- CDC lane: Debezium
+- batch / sync lane: Airbyte
+
+Enterprise vendor backends should come later:
+- HVR
+- Informatica
+
+That lets the platform validate the control-plane model early, defer expensive vendor integration work, and later add support-tier policy logic for critical workloads.
+
+## Phase 0: Architecture, contracts, and local sandbox
 
 ### Deliverables
 - written architecture spec
-- DSL v1 shape
-- backend capability matrix
+- `Pipeline` v1 shape
+- `Connection` v1 shape
+- OSS-first backend capability matrix
 - policy model
 - canonical internal data model
+- local docker-compose sandbox design
+- Phase 0 checklist with example scenarios
 
 ### To do
-- define the `Pipeline` resource shape
-- define required metadata and ownership fields
-- define source and target model
-- define semantics model
-- define policy input contract
-- define state persistence model
-- define HVR capability matrix
-- define Informatica capability matrix
+- write a short v1 scope statement
+- define explicit non-goals for v1
+- choose initial OSS backends
+  - Debezium for CDC
+  - Airbyte for batch / sync
+- define the `Pipeline` v1 resource boundary
+- define the `Connection` v1 resource boundary
+- define how `Pipeline` references `Connection`
+- define what fields are forbidden in pipeline specs, especially credentials
+- define minimal dataset/object reference conventions
+- define minimal `Pipeline` v1 sections
+- define minimal `Connection` v1 sections
+- define the policy input contract
+- define the initial plan object model
+- define the lifecycle state model
+- define the connection registry / resolver approach
+- define the secrets-backed connection resolution flow
+- build a capability matrix for Debezium and Airbyte
+- define unsupported combinations that must be rejected in v1
+- create canonical example specs
+- design a local docker-compose stack for testing
+  - include Debezium and Airbyte
+  - include source and destination systems
+  - include seeded source data
+  - include recurring generated updates to source data
 
 ### Validation strategy
 - architecture review
 - model at least five representative example pipelines
 - confirm each example can either map cleanly or fail clearly
+- confirm the docker-compose sandbox is sufficient to exercise both CDC and batch flows
 
-## Phase 1: DSL and validation
+## Phase 1: DSL, validation, and example set
 
 ### Deliverables
 - YAML parser
@@ -38,15 +69,19 @@ The initial goal should not be to support every possible pipeline shape. The ini
 - semantic validation layer
 - validation CLI
 - sample specs
+- initial `Connection` validation support
 
 ### To do
-- write initial JSON Schema
+- write initial JSON Schema for `Pipeline`
+- write initial JSON Schema for `Connection`
 - implement parser in Go
 - implement semantic checks
+- implement connection reference validation
 - create examples for:
-  - CDC pipeline
-  - batch pipeline
+  - CDC pipeline routed to Debezium
+  - batch pipeline routed to Airbyte
   - invalid pipeline
+  - connection policy violation
 - produce readable validation errors
 
 ### Validation strategy
@@ -64,11 +99,15 @@ The initial goal should not be to support every possible pipeline shape. The ini
 ### To do
 - define policy input JSON
 - implement routing rules:
-  - CDC -> HVR
-  - batch -> Informatica
+  - CDC -> Debezium
+  - batch / sync -> Airbyte
 - implement rejection rules for unsupported combinations
 - implement approval rules for risky changes
+- implement connection usage policy checks
 - expose human-readable explanation output
+- document future policy extension points for:
+  - critical CDC -> HVR
+  - critical batch -> Informatica
 
 ### Validation strategy
 - table-driven policy tests
@@ -79,14 +118,14 @@ The initial goal should not be to support every possible pipeline shape. The ini
 
 ### Deliverables
 - internal plan model
-- HVR compiler
-- Informatica compiler
+- Debezium compiler
+- Airbyte compiler
 - plan diff support
 
 ### To do
 - define plan object model
-- map abstract DSL to HVR operations
-- map abstract DSL to Informatica operations
+- map abstract DSL to Debezium operations
+- map abstract DSL to Airbyte operations
 - classify create, update, delete, and no-op
 - mark destructive or high-risk operations
 
@@ -100,11 +139,12 @@ The initial goal should not be to support every possible pipeline shape. The ini
 ### Deliverables
 - API service
 - Postgres schema
-- persistence for pipeline and execution state
+- persistence for pipeline, connection, and execution state
 
 ### To do
 - design tables for:
   - pipeline specs
+  - connection metadata
   - selected backend
   - rendered plans
   - lifecycle state
@@ -121,12 +161,13 @@ The initial goal should not be to support every possible pipeline shape. The ini
 - migration tests
 - persistence and recovery tests
 
-## Phase 5: Workflow orchestration
+## Phase 5: Workflow orchestration and connection resolution
 
 ### Deliverables
 - Temporal workflows
 - backend activities
 - lifecycle state integration
+- connection resolution path
 
 ### To do
 - implement workflows for:
@@ -136,6 +177,7 @@ The initial goal should not be to support every possible pipeline shape. The ini
   - delete
 - implement retry policies
 - implement compensation paths
+- implement secrets-backed connection resolution for apply-time use
 - map workflow progress to lifecycle states
 
 ### Validation strategy
@@ -143,35 +185,36 @@ The initial goal should not be to support every possible pipeline shape. The ini
 - retry and idempotency tests
 - failure injection tests
 - recovery tests after interrupted execution
+- connection resolution integration tests
 
-## Phase 6: HVR adapter
+## Phase 6: Debezium adapter
 
 ### Deliverables
-- HVR integration for CDC pipelines
+- Debezium integration for CDC pipelines
 
 ### To do
 - implement auth handling
 - implement connection/config translation
 - implement create, update, read, and delete actions
 - implement state read-back for verification
-- normalize HVR-specific errors
+- normalize Debezium-specific errors
 
 ### Validation strategy
 - mocked adapter tests
 - sandbox integration tests
 - create/update/no-op/delete coverage
 
-## Phase 7: Informatica adapter
+## Phase 7: Airbyte adapter
 
 ### Deliverables
-- Informatica integration for batch pipelines
+- Airbyte integration for batch / sync pipelines
 
 ### To do
 - implement auth handling
 - implement object translation
 - implement create, update, read, and delete actions
 - read back state for verification
-- normalize Informatica-specific errors
+- normalize Airbyte-specific errors
 
 ### Validation strategy
 - mocked adapter tests
@@ -219,7 +262,27 @@ The initial goal should not be to support every possible pipeline shape. The ini
 - verify detection and state transition
 - confirm traces for full apply path
 
-## Phase 10: Production hardening
+## Phase 10: Vendor backend expansion
+
+### Deliverables
+- HVR adapter
+- Informatica adapter
+- support-tier policy extension
+
+### To do
+- implement HVR integration for critical CDC pipelines
+- implement Informatica integration for critical batch pipelines
+- add policy logic for critical vs non-critical routing
+- expand capability matrices to include vendor backends
+- define migration or override logic for moving selected pipelines to vendor lanes
+
+### Validation strategy
+- mocked adapter tests
+- sandbox or non-prod vendor integration tests
+- critical workload routing policy tests
+- plan compatibility review between OSS and vendor backends
+
+## Phase 11: Production hardening
 
 ### Deliverables
 - authn/authz
@@ -244,21 +307,72 @@ The initial goal should not be to support every possible pipeline shape. The ini
 
 A good MVP is complete when the system can do all of the following reliably:
 
-1. accept a valid YAML pipeline spec
-2. select HVR for a CDC example
-3. select Informatica for a batch example
-4. generate a readable backend-specific plan
-5. apply that plan through Temporal
-6. verify final state
-7. report clear status and failure reasons
+1. accept a valid YAML `Pipeline` spec
+2. validate referenced `Connection` resources
+3. select Debezium for a CDC example
+4. select Airbyte for a batch example
+5. generate a readable backend-specific plan
+6. apply that plan through Temporal
+7. verify final state
+8. report clear status and failure reasons
+
+## Phase 0 checklist
+
+### Product boundary
+- [ ] write a short v1 scope statement
+- [ ] define explicit non-goals for v1
+- [ ] confirm initial OSS backend choices
+  - [ ] Debezium
+  - [ ] Airbyte
+
+### Local sandbox
+- [ ] design docker-compose stack for local testing
+- [ ] include Debezium and Airbyte in the stack
+- [ ] choose source systems for local testing
+- [ ] choose destination systems for local testing
+- [ ] include seeded source data
+- [ ] include recurring generated source updates
+- [ ] document how sandbox scenarios map to pipeline examples
+
+### Resources and DSL
+- [ ] define the `Pipeline` v1 resource boundary
+- [ ] define the `Connection` v1 resource boundary
+- [ ] define how `Pipeline` references `Connection`
+- [ ] define minimal v1 sections for `Pipeline`
+- [ ] define minimal v1 sections for `Connection`
+- [ ] define forbidden fields in pipeline specs, especially credentials
+- [ ] define dataset/object reference conventions
+
+### Policy and planning
+- [ ] define policy input shape
+- [ ] define initial routing decision table
+- [ ] define lifecycle states
+- [ ] define plan object structure
+- [ ] define unsupported combinations and rejection behavior
+
+### Connections and security
+- [ ] define connection registry approach
+- [ ] define secrets-backed resolution flow
+- [ ] define connection usage policy model
+- [ ] define normalized resolved connection payload for adapters
+
+### Examples and validation
+- [ ] create canonical example specs
+  - [ ] CDC example routed to Debezium
+  - [ ] batch example routed to Airbyte
+  - [ ] invalid example
+  - [ ] connection policy violation example
+  - [ ] unsupported capability example
+- [ ] confirm each example can be routed or rejected clearly
 
 ## Initial implementation to-do list
 
 ### Foundations
 - [ ] write an ADR for the control-plane approach
 - [ ] define the DSL v1 field set
-- [ ] create sample pipeline specs
-- [ ] build capability matrices for HVR and Informatica
+- [ ] define the `Connection` v1 field set
+- [ ] create sample pipeline and connection specs
+- [ ] build capability matrices for Debezium and Airbyte
 - [ ] define the canonical internal model
 
 ### Validation and policy
@@ -270,15 +384,15 @@ A good MVP is complete when the system can do all of the following reliably:
 
 ### Planning and execution
 - [ ] define the internal plan model
-- [ ] implement HVR compiler
-- [ ] implement Informatica compiler
+- [ ] implement Debezium compiler
+- [ ] implement Airbyte compiler
 - [ ] bootstrap Go API service
 - [ ] add Postgres-backed state persistence
 - [ ] add Temporal workers
 
 ### Integrations
-- [ ] implement HVR adapter CRUD operations
-- [ ] implement Informatica adapter CRUD operations
+- [ ] implement Debezium adapter CRUD operations
+- [ ] implement Airbyte adapter CRUD operations
 - [ ] normalize backend errors into platform errors
 
 ### Delivery workflows

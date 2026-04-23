@@ -7,8 +7,10 @@ A policy-driven control plane for declarative data pipelines.
 ETL Abstracter is a GitOps-native system for managing data pipelines as code. Users declare pipelines in YAML, and the platform validates them, evaluates policy, chooses an execution backend, and provisions the resulting pipeline through the appropriate tool.
 
 The initial backend routing goal is simple:
-- CDC pipelines should route to HVR
-- batch pipelines should route to Informatica
+- CDC pipelines should route to Debezium
+- batch / sync pipelines should route to Airbyte
+
+Vendor backends like HVR and Informatica can be added later through policy tiers for critical workloads.
 
 ## Why this exists
 
@@ -62,10 +64,12 @@ The platform performs an explicit control-plane workflow:
 
 The first version should focus on a narrow, trustworthy slice:
 - one `Pipeline` DSL kind
-- HVR and Informatica backends only
+- one `Connection` DSL kind
+- Debezium and Airbyte backends first
 - simple routing policy
-  - CDC -> HVR
-  - batch -> Informatica
+  - CDC -> Debezium
+  - batch / sync -> Airbyte
+- a local docker-compose sandbox for testing
 - plan generation in CI
 - apply on merge
 - execution tracking
@@ -80,6 +84,7 @@ The first version should focus on a narrow, trustworthy slice:
 - [Backend Capabilities Matrix](docs/capabilities-matrix.md)
 - [Connection Model and Lookup Service](docs/connection-model.md)
 - [Long-Term Vision](docs/long-term-vision.md)
+- [v1 Scope](docs/v1-scope.md)
 
 ## Open questions
 
@@ -89,7 +94,8 @@ A few foundational questions still need answers before implementation:
 - how expressive should transforms be in v1?
 - are connections and credentials pre-registered?
 - is GitHub the only interface at first?
-- how mature are the HVR and Informatica APIs for automation?
+- should batch v1 remain Airbyte-first, or should Meltano be brought in earlier?
+- when should vendor-supported backend policies be introduced?
 
 ## Current recommendation
 
