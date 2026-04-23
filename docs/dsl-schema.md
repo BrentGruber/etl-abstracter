@@ -15,6 +15,7 @@ The DSL should:
 - keep common concepts in a shared core
 - allow backend-specific extensions when necessary
 - separate policy inputs from backend implementation details
+- keep connection material out of pipeline resources
 - support validation, planning, and explainable rejection
 
 ## Resource model
@@ -117,13 +118,13 @@ Why it matters:
 
 One to many source definitions.
 
+Connection details should be resolved through a separate connection registry / lookup service. A pipeline source should reference a named connection rather than embed credentials or raw connection material.
+
 Example:
 
 ```yaml
 sources:
   - name: erp-customers
-    system: oracle-prod
-    type: oracle
     connectionRef: oracle-prod-customers
     object:
       database: null
@@ -139,8 +140,6 @@ sources:
 
 Proposed fields per source:
 - `name`
-- `system`
-- `type`
 - `connectionRef`
 - `object`
   - `database`
@@ -171,18 +170,19 @@ Why it matters:
 - movement semantics
 - merge/upsert behavior
 - snapshot vs incremental planning
+- separation of pipeline intent from connection material
 
 ## 3. `targets`
 
 One to many targets.
+
+Targets should also reference named connections and keep all credential material outside the pipeline resource.
 
 Example:
 
 ```yaml
 targets:
   - name: snowflake-raw-customers
-    system: snowflake-prod
-    type: snowflake
     connectionRef: snowflake-raw
     object:
       database: analytics
@@ -196,8 +196,6 @@ targets:
 
 Proposed fields per target:
 - `name`
-- `system`
-- `type`
 - `connectionRef`
 - `object`
   - `database`
@@ -219,6 +217,7 @@ Why it matters:
 - merge strategy
 - file/table/topic delivery shape
 - correctness semantics
+- secret-free pipeline resources
 
 ## 4. `semantics`
 
@@ -746,5 +745,7 @@ backendExtensions:
 ## Final note
 
 The DSL should remain focused on **intent and constraints**, not become a programming language.
+
+It should also remain focused on pipeline behavior, not connection material. Connections should be resolved through a separate registry and secrets-backed lookup path.
 
 That will make policy evaluation, backend selection, planning, and long-term maintenance much saner.

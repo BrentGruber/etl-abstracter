@@ -25,14 +25,17 @@ This project aims to provide:
 
 Users define the desired pipeline, not the exact tool implementation.
 
+Pipelines reference named connections rather than embedding credentials. Connection details are resolved separately through a registry and secrets-backed lookup path.
+
 The platform performs an explicit control-plane workflow:
 1. parse YAML
 2. validate schema and semantics
-3. evaluate policy
+3. validate references and policy
 4. select backend
 5. compile a backend-specific plan
-6. apply via orchestrated workflows
-7. verify and track resulting state
+6. resolve connections securely at apply time
+7. apply via orchestrated workflows
+8. verify and track resulting state
 
 ## Proposed stack
 
@@ -75,6 +78,7 @@ The first version should focus on a narrow, trustworthy slice:
 - [DSL and Workflows](docs/dsl-and-workflows.md)
 - [Proposed DSL Schema](docs/dsl-schema.md)
 - [Backend Capabilities Matrix](docs/capabilities-matrix.md)
+- [Connection Model and Lookup Service](docs/connection-model.md)
 
 ## Open questions
 

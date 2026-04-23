@@ -36,6 +36,9 @@ This is intentionally approximate for now. It should be refined once the concret
 
 | DSL area | Capability / knob | HVR | Informatica | Control-plane note |
 | --- | --- | --- | --- | --- |
+| Connections | named `connectionRef` lookup | Platform | Platform | Should be resolved by the control plane / lookup path |
+| Connections | raw credentials in pipeline DSL | Not Recommended | Not Recommended | Keep out of pipeline resources |
+| Connections | connection usage restrictions by team/environment | Platform | Platform | Strong OPA policy use case |
 | Ownership | ownerTeam, approvers, runbook | Platform | Platform | Should be platform-only metadata |
 | Sources | single source table/object | Strong | Strong | Common model |
 | Sources | multiple sources | Partial | Strong | Good policy signal |
@@ -93,6 +96,7 @@ The shared schema should cover:
 - schema policy
 - governance
 - ownership
+- named connection references, not raw credential material
 
 That gives policy and planning enough signal without overfitting to any one backend.
 
@@ -129,6 +133,7 @@ These are important because they help select the right backend.
 
 ### Strong candidates for common v1 fields
 - one to many sources and targets
+- `connectionRef` on sources and targets
 - pipeline mode
 - trigger mode
 - basic delivery mode
@@ -174,6 +179,6 @@ Before locking the DSL or planner behavior, validate the following:
 Use this matrix to drive three decisions:
 1. what belongs in the common DSL
 2. what belongs in `backendExtensions`
-3. what belongs in platform policy instead of either backend
+3. what belongs in platform policy or the connection lookup layer instead of either backend
 
 That separation will keep the system understandable and prevent the DSL from collapsing into a vague least-common-denominator format.

@@ -17,7 +17,7 @@ That distinction matters because HVR and Informatica are not equivalent executio
 
 ## High-level architecture
 
-The platform can be broken into eight layers.
+The platform can be broken into nine layers.
 
 ### 1. DSL / Spec layer
 User-authored YAML that describes desired pipeline intent.
@@ -27,6 +27,7 @@ Responsibilities:
 - stable schema
 - ownership and metadata
 - desired source, target, semantics, and requirements
+- references to named connections rather than embedded credentials
 
 ### 2. Validation and enrichment
 Ensures the input is structurally and semantically valid before any policy or backend logic runs.
@@ -35,6 +36,7 @@ Responsibilities:
 - schema validation
 - semantic validation
 - reference validation
+- connection reference validation
 - defaulting and canonicalization
 
 ### 3. Policy engine
@@ -46,6 +48,7 @@ Responsibilities:
 - compliance checks
 - approval requirements
 - explainable policy output
+- connection usage policy evaluation
 
 ### 4. Compiler / planner
 Maps the validated and policy-evaluated model into a backend-specific execution plan.
@@ -65,8 +68,19 @@ Responsibilities:
 - polling for completion
 - resumability
 - lifecycle progression
+- secure connection resolution during apply
 
-### 6. Backend adapters
+### 6. Connection registry and lookup path
+Separates connection metadata and secret resolution from the pipeline DSL.
+
+Responsibilities:
+- resolve `connectionRef`
+- validate connection existence and environment fit
+- enforce connection usage policy
+- resolve secret references from a secrets manager
+- return normalized connection material to adapters
+
+### 7. Backend adapters
 Encapsulate integration logic with each execution platform.
 
 Initial adapters:
@@ -74,22 +88,23 @@ Initial adapters:
 - Informatica
 
 Responsibilities:
-- auth and connection handling
+- consume normalized resolved connection material
 - CRUD operations against backend APIs
 - capability checks
 - state read-back for verification
 - backend error normalization
 
-### 7. Control plane API and state store
-Stores pipeline state, execution history, and plan metadata.
+### 8. Control plane API and state store
+Stores pipeline state, execution history, plan metadata, and connection metadata.
 
 Responsibilities:
 - persist desired and observed state
 - expose status APIs
 - retain execution history
 - support drift and audit workflows
+- persist connection registry metadata
 
-### 8. GitOps / CI integration
+### 9. GitOps / CI integration
 Connects repository workflows to validation, planning, and apply operations.
 
 Responsibilities:
@@ -104,13 +119,15 @@ The system should use an explicit pipeline for every change:
 
 1. parse
 2. validate
-3. enrich
-4. evaluate policy
-5. select backend
-6. compile plan
-7. apply plan
-8. verify result
-9. monitor for drift
+3. resolve and validate references
+4. enrich
+5. evaluate policy
+6. select backend
+7. compile plan
+8. resolve connections securely at apply time
+9. apply plan
+10. verify result
+11. monitor for drift
 
 Making these phases explicit will help a lot with debugging, user trust, and auditability.
 
@@ -171,7 +188,7 @@ Good fit for:
 OPA should remain focused on policy, not become the whole application logic layer.
 
 ### Postgres
-Use Postgres for control-plane state.
+Use Postgres for control-plane state and connection metadata.
 
 Good fit for:
 - pipeline metadata
@@ -180,6 +197,7 @@ Good fit for:
 - rendered plans
 - observed state snapshots
 - audit records
+- connection registry metadata
 
 ### JSON Schema
 Use JSON Schema for structural validation of the DSL.
@@ -206,6 +224,9 @@ Pipeline definitions should live in Git and drive the system.
 ### Intent is separate from implementation
 Users declare outcomes. The platform decides how to realize them.
 
+### Connection material is separate from pipeline intent
+Pipelines should reference named connections. Secrets and credential material should be resolved through a registry and secrets-backed lookup path.
+
 ### Policy decides placement
 Backend selection should be visible and testable policy, not hidden conditional logic.
 
@@ -229,6 +250,7 @@ A practical starting layout:
 - spec parser / validator
 - policy service
 - planner / compiler
+- connection registry / resolver module
 - control plane API
 - Temporal worker service
 - HVR adapter module
