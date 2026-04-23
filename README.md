@@ -73,6 +73,8 @@ The first version should focus on a narrow, trustworthy slice:
 - [Architecture](docs/architecture.md)
 - [Roadmap](docs/roadmap.md)
 - [DSL and Workflows](docs/dsl-and-workflows.md)
+- [Proposed DSL Schema](docs/dsl-schema.md)
+- [Backend Capabilities Matrix](docs/capabilities-matrix.md)
 
 ## Open questions
 
